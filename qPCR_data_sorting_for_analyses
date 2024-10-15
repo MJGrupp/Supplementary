@@ -1,0 +1,50 @@
+library(data.table)
+library(tidyverse)
+
+## first with raw csv file:
+  ## sort by sample and then sort by target
+  ## delete cq values for any wells where replicates weren't good enough for
+  ## do this for all 3 targets in that well so that rows are still in the table but cq cells are blank
+  ## if deleting every measurement for a sample you can delete all rows for the sample
+  ## but if only deleting 1 replicate keep rows and delete cq
+
+## find and read in the correct files for qPCR results
+qpcr_res_files <- list.files(path="data/new", full.names = TRUE, pattern = "Quantification Cq Results.csv", recursive = TRUE)
+qpcr_res <- read_csv(qpcr_res_files, id="path", na=c("", "NaN"))
+qpcr_res_table_dt <- data.table(qpcr_res)
+## make a column in the table with the plate name
+qpcr_res_table_dt$plate_id <- tstrsplit(qpcr_res_table_dt$path, "/", keep = 3, fixed=T)
+# remove unnecessary columns
+qpcr_res_table_dt <- qpcr_res_table_dt[,-c(1, 7, 9:16)]
+
+## remove NTCs & positive controls
+qpcr_res_table <- subset(qpcr_res_table_dt, !grepl("NTC|Pos Ctrl", Content))
+
+## reorder by sample, well and then target
+setorder(qpcr_res_table, Sample, Target, Well)
+## add replicate number (1,2,3,1,2,3,1,2,3) - this is needed for a below step
+qpcr_res_table$Replicate <- rep(1:3, (length(qpcr_res_table$Sample)/3))
+## remove unnecessary columns
+impt_res <- qpcr_res_table[,c(6,3,5,7,8)]
+impt_res$target_replicate <- paste(impt_res$Target, impt_res$Replicate, sep="_")
+impt_res <- data.table(impt_res)
+## check here that for every sample & target combination there are three Cq values (though these might be blank)
+sample_target_counts <- impt_res %>% group_by(Sample, Target) %>% count()
+
+## change table format to have a column per Target_Replicate - this is needed for later analysis
+dcast_impt_res <- dcast(impt_res, Sample + plate_id ~ target_replicate, value.var="Cq")
+
+## merge with other sample information
+sample_table <- fread("data/sample_table.csv")
+qpcr_res_sample_info <- merge(sample_table, dcast_impt_res, by="Sample", all.y = T)
+
+## remove samples where we deleted Cq values for every well
+remove_blank_samples <- qpcr_res_sample_info %>%
+  filter(!if_all(c(6:14), is.na))
+
+## the only primer set you might ever have more than 1 replicate missing a Cq value is ODV
+
+fwrite(remove_blank_samples, "output/sample_by_cq.csv")
+
+
+### we can either continue analysis in R or perform rest of analysis in excel
