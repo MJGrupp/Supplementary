@@ -1,0 +1,259 @@
+## 1992 Infection Prevalence
+
+# 1. Filter data for the year 1992-1993
+data_1992 <- mge %>%
+  filter(year %in% c("1992", "1993"))
+
+# Create a new column to identify infection status (infected/uninfected)
+data_1992$Infected <- ifelse(data_1992$Relative_Load > 0, "Infected", "Uninfected")
+
+location_order <- c("La Serena", "Concepcion",   # Chile (West Andes)
+                    "Bariloche", "Mendoza", "Rio Negro", "Ascasubi",  # Argentina (East Andes)
+                    "Uruguay",   # Uruguay
+                    "Porto Alegre")  # Brazil
+
+# Convert Ecotype to a factor with the custom order
+data_1992$Ecotype <- factor(data_1992$Ecotype, levels = location_order)
+
+# Create a 'Region' variable based on Ecotype
+data_1992 <- data_1992 %>%
+  mutate(Region = case_when(
+    Ecotype %in% c("La Serena", "Concepcion") ~ "Chile (West Andes)",
+    Ecotype %in% c("Bariloche", "Mendoza", "Rio Negro", "Ascasubi") ~ "Argentina (East Andes)",
+    Ecotype == "Uruguay" ~ "Uruguay",
+    Ecotype == "Porto Alegre" ~ "Brazil"
+  ))
+
+# Calculate infection prevalence for each ecotype, and confidence intervals
+prevalence_1992 <- data_1992 %>%
+  group_by(Ecotype) %>%
+  summarise(
+    total_samples = n(),
+    infected_samples = sum(Infected == "Infected"),
+    prevalence = (infected_samples / total_samples) * 100,  # Prevalence as a percentage
+    ci_lower = binom.confint(infected_samples, total_samples, methods = "wilson")$lower * 100,
+    ci_upper = binom.confint(infected_samples, total_samples, methods = "wilson")$upper * 100
+  ) %>%
+  ungroup()
+
+# Add Region column to the summarised data
+prevalence_1992 <- prevalence_1992 %>%
+  mutate(Region = case_when(
+    Ecotype %in% c("La Serena", "Concepcion") ~ "Chile (West Andes)",
+    Ecotype %in% c("Bariloche", "Mendoza", "Rio Negro", "Ascasubi") ~ "Argentina (East Andes)",
+    Ecotype == "Uruguay" ~ "Uruguay",
+    Ecotype == "Porto Alegre" ~ "Brazil"
+  ))
+
+# Define the order of regions
+region_order <- c("Chile (West Andes)", 
+                  "Argentina (East Andes)", 
+                  "Uruguay", 
+                  "Brazil")
+
+# Convert Region to a factor with the custom order
+prevalence_1992$Region <- factor(prevalence_1992$Region, levels = region_order)
+
+# Plot: Bars are colored by Ecotype, and Region is shown on the x-axis
+ggplot(prevalence_1992, aes(x = Ecotype, y = prevalence, fill = Ecotype)) +
+  geom_bar(stat = "identity", width = 0.8) +  # Use consistent bar width
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +  # Add error bars
+  ylab("Infection Prevalence (%)") +
+  xlab("Ecotype (1992/1993)") +
+  facet_grid(~ Region, scales = "free_x", space = "free_x") +  # Facet by Region but free x-axis within facets
+  theme(axis.text.x = element_text(angle = 65, hjust = 1),
+       # don't print the legend
+       legend.position = "none")+# Add space between facets
+   theme_bw()() +
+  scale_fill_viridis(discrete = TRUE, direction = 1) +  # Ecotype coloring
+  guides(fill = "none")
+
+#########
+
+
+#1998
+data_1998 <- mge %>%
+  filter(year == "1998")
+
+# 2. Create a new column to identify infection status (infected/uninfected)
+data_1998$Infected <- ifelse(data_1998$Relative_Load > 0, "Infected", "Uninfected")
+
+location_order <- c("La Serena", "Concepcion",   # Chile (West Andes)
+                    "Bariloche", "Mendoza", "Rio Negro", "Ascasubi",  # Argentina (East Andes)
+                    "Uruguay",   # Uruguay
+                    "Porto Alegre")  # Brazil
+
+# Convert Ecotype to a factor with the custom order
+data_1998$Ecotype <- factor(data_1998$Ecotype, levels = location_order)
+
+# Create a 'Region' variable based on Ecotype
+data_1998 <- data_1998 %>%
+  mutate(Region = case_when(
+    Ecotype %in% c("La Serena", "Concepcion") ~ "Chile (West Andes)",
+    Ecotype %in% c("Bariloche", "Mendoza", "Rio Negro", "Ascasubi") ~ "Argentina (East Andes)",
+    Ecotype == "Uruguay" ~ "Uruguay",
+    Ecotype == "Porto Alegre" ~ "Brazil"
+  ))
+
+# Calculate infection prevalence for each ecotype, and confidence intervals
+prevalence_1998 <- data_1998 %>%
+  group_by(Ecotype) %>%
+  summarise(
+    total_samples = n(),
+    infected_samples = sum(Infected == "Infected"),
+    prevalence = (infected_samples / total_samples) * 100,  # Prevalence as a percentage
+    ci_lower = binom.confint(infected_samples, total_samples, methods = "wilson")$lower * 100,
+    ci_upper = binom.confint(infected_samples, total_samples, methods = "wilson")$upper * 100
+  ) %>%
+  ungroup()
+
+# Add Region column to the summarised data
+prevalence_1998 <- prevalence_1998%>%
+  mutate(Region = case_when(
+    Ecotype %in% c("La Serena", "Concepcion") ~ "Chile (West Andes)",
+    Ecotype %in% c("Bariloche", "Mendoza", "Rio Negro", "Ascasubi") ~ "Argentina (East Andes)",
+    Ecotype == "Uruguay" ~ "Uruguay",
+    Ecotype == "Porto Alegre" ~ "Brazil"
+  ))
+
+# Define the order of regions
+region_order <- c("Chile (West Andes)", 
+                  "Argentina (East Andes)", 
+                  "Uruguay", 
+                  "Brazil")
+
+# Convert Region to a factor with the custom order
+prevalence_1998$Region <- factor(prevalence_1998$Region, levels = region_order)
+
+# Plot: Bars are colored by Ecotype, and Region is shown on the x-axis
+ggplot(prevalence_1998, aes(x = Ecotype, y = prevalence, fill = Ecotype)) +
+  geom_bar(stat = "identity", width = 0.8) +  # Use consistent bar width
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +  # Add error bars
+  ylab("Infection Prevalence (%)") +
+  xlab("Ecotype (1998)") +
+  facet_grid(~ Region, scales = "free_x", space = "free_x") +  # Facet by Region but free x-axis within facets
+  theme(axis.text.x = element_text(angle = 65, hjust = 1),
+        # don't print the legend
+        legend.position = "none")+# Add space between facets
+   theme_minimal() +
+  scale_fill_viridis(discrete = TRUE, direction = 1) +  # Ecotype coloring
+  guides(fill = "none")
+
+#######
+
+#Rearing, vs contemporary, vs ecotype
+
+rearing_1998 <- mge %>%
+  filter(year == "1998")
+
+release_1990 <- Data %>%
+  filter( Ecotype %in% c("Raukura", "Reporoa", "Wellsford"))
+Contemp_2020 <- Data %>%
+  filter( Ecotype %in% c("Ruakura_Post decline", "Timaru", "Lincoln", "Tokanui"))
+
+# 2. Create 'Infected' columns in both datasets
+rearing_1998$Infected <- ifelse(rearing_1998$Relative_Load > 0, "Infected", "Uninfected")
+release_1990$Infected <- ifelse(release_1990$Relative_Load > 0, "Infected", "Uninfected")
+Contemp_2020$Infected <- ifelse(Contemp_2020$Relative_Load > 0, "Infected", "Uninfected")
+data_1992$Infected <- ifelse(data_1992$Relative_Load > 0, "Infected", "Uninfected")
+data_1992$Group <- "Early Rearing (1992-1993)"
+rearing_1998$Group <- "Late Rearing (1998)"
+release_1990$Group <- "Post Release (1992-1996)"
+Contemp_2020$Group <- "Contemporary (2020-2024)"
+
+combined_data_1998 <- bind_rows(rearing_1998, release_1990, Contemp_2020, data_1992)
+combined_data_1998_filtered <- subset(combined_data_1998, !is.na(Relative_Load) & Relative_Load > 0)
+
+prevalence_combined <- combined_data_1998 %>%
+  group_by(Group) %>%
+  summarise(
+    total_samples = n(),
+    infected_samples = sum(Infected == "Infected"),
+    prevalence = (infected_samples / total_samples) * 100
+  ) %>%
+  mutate(
+    ci = purrr::map2(infected_samples, total_samples, function(x, y) {
+      print(paste("infected_samples:", x, "total_samples:", y))  # Debug print statement
+      if (y == 0) {
+        list(lower = NA, upper = NA)
+      } else {
+        binom.confint(x, y, methods = "wilson")
+      }
+    }),
+    ci_lower = purrr::map_dbl(ci, ~ .x$lower * 100),
+    ci_upper = purrr::map_dbl(ci, ~ .x$upper * 100)
+  ) %>%
+  select(-ci)
+
+prevalence_combined$Group <- factor(prevalence_combined$Group, 
+                                    levels = c("Early Rearing (1992-1993)", "Late Rearing (1998)", 
+                                               "Post Release (1992-1996)", "Contemporary (2020-2024)"))
+contingency_table <- table(combined_data_1998$Group, combined_data_1998$Infected)
+print(contingency_table)
+pairwise_test <- pairwise_fisher_test(contingency_table, p.adjust.method = "fdr")
+print(pairwise_test)
+significant_results <- pairwise_test %>%
+  filter(p.adj.signif != "ns")
+max_y <- max(prevalence_combined$ci_upper, na.rm = TRUE)
+
+p <- ggplot(prevalence_combined, aes(x = Group, y = prevalence, fill = Group)) +
+  geom_bar(stat = "identity", width = 0.8) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+  ylab("Infection Prevalence (%)") +
+  xlab("Period") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  theme(legend.position = "none") +
+  scale_fill_viridis(discrete = TRUE, direction = 1)+
+  scale_y_continuous(breaks = seq(0, 100, by = 20))
+
+for(i in 1:nrow(significant_results)) {
+  p <- p + 
+    geom_signif(comparisons = list(c(significant_results$group1[i], significant_results$group2[i])),
+                annotations = significant_results$p.adj.signif[i],
+                y_position = max_y + (i * 6),  
+                tip_length = 0.02)
+}
+p
+
+ggplot(prevalence_combined, aes(x = Group, y = prevalence, fill = Group)) +
+  geom_bar(stat = "identity", width = 0.8) +  # Use consistent bar width
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) + 
+  ylab("Infection Prevalence (%)") +
+  xlab("Group") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1)) +
+  theme(legend.position = "none") +
+  scale_fill_viridis(discrete = TRUE, direction = 1) 
+
+
+#boxplot of MhFV load between periods
+
+combined_data_1998_filtered$Group <- factor(combined_data_1998_filtered$Group, 
+                                            levels = c("Early Rearing (1992-1993)", "Late Rearing (1998)", 
+                                                       "Post Release (1992-1996)", "Contemporary (2020-2024)"))
+# Create the boxplot
+ ggplot(combined_data_1998_filtered, aes(x = Group, y = Relative_Load, color = Group)) +
+  geom_boxplot(outlier.shape = NA, alpha = 0.7) +  
+  geom_jitter(position = position_jitter(width = 0.2), alpha = 0.5, size = 2) +  # Scatter plot with jitter to avoid overplotting
+  ylab("Relative Virus Load (Scale x Log10)") +
+  xlab("Period") +
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  scale_y_log10(breaks = c(1, 2, 5, 10, 20, 50),  # Custom breaks
+                labels = c("1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(1, 50)) +  # Limit y-axis for better focus
+  theme(legend.position = "none")
+
+shapiro <- shapiro.test(combined_data_1998_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ Group, data = combined_data_1998_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(combined_data_1998_filtered$Relative_Load, combined_data_1998_filtered$Group, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+
+
+
