@@ -1,0 +1,48 @@
+library(data.table)
+library(tidyverse)
+library(qubitr)
+
+## these are the column names in your raw clariostar output in the order that they appear
+my_col_names <- c("content","plate_row","plate_col",
+                  "raw_fl")
+
+## read in th first 4 columns of the specified csv, and set column names to those above
+raw_data <- data.table(fread("output/Mh_ASW_extraction_090524.csv",
+                  select = c(1:4),
+                  col.names = my_col_names,
+                  skip=9))
+
+# adds the volumes which were added to each well for concentration calculations
+# first add your first and last well IDs in a 96 well plate (these don't need to be changed each time)
+# then volume of sample added for Qubit - should generally be 1 uL
+# finally the volume of sample you have left over after Qubit - generally 29 uL
+AddVolumes(raw_data, "A1", "H12", 1, 29)
+
+# find blank (0ng standards) and subtract this background from all other samples
+#### make sure to check which wells standards were in for the plate - this can change ####
+background_subtracted <- SubtractBackground(raw_data, c("A12", "B12"))
+
+# specify standard wells and amount of DNA in them
+# paste well letters (C-H), then well number, then standard ngs
+# i.e. this pastes C7, D7, E7, F7, G7, H7, with the first two being 2ng, then 2x 8ng then 2x 10ng
+standard_wells <- data.table(well = paste0(LETTERS[3:8], 12), ## have to change number here for standard col number!!
+                             amount = c(rep(2, 2), rep(8, 2), rep(10, 2))) ## check these standard conc.s are correct
+
+
+# based on std curve, calculate amount in unknown samples
+calculated_amounts <- CalculateAmounts(background_subtracted, standard_wells)
+# final results
+results <- ExtractResults(calculated_amounts)
+results$well_ID <- paste(results$plate_row, results$plate_col, sep="")
+
+# merge with sample IDs to form nicely formatted table
+calculated_amounts$well_ID <- paste(calculated_amounts$plate_row, calculated_amounts$plate_col, sep="")
+id_to_well <- calculated_amounts[,c(3, 10)]
+results_ids <- merge(results, id_to_well, by="well_ID")
+# remove standards from table - need to change the well IDs in the second half (0ng standards) depending on plate layout
+results_ids_no_standards <- subset(results_ids, !(well_ID %in% standard_wells$well | well_ID %in%  c("A12", "B12")))
+# rearrange columns
+final_results_ids_table <- results_ids_no_standards[,c(2,3,8,4,6,5,7)]
+setorder(final_results_ids_table, plate_col, plate_row)
+
+fwrite(final_results_ids_table, "clariostar_output/Mh_AS_res/Mh_ASW_extraction_090524_results.csv")
