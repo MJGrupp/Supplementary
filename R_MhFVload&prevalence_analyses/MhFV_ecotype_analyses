@@ -1,0 +1,687 @@
+library(data.table)
+library(ggplot2)
+library(viridis)
+library(scales)
+library(ggbreak)
+library(cowplot)
+library(ggsignif)
+library(binom)
+library(tidyr)
+library(tibble)  
+library(rstatix)
+
+
+
+Data = read.csv("output/qPCR_data_results.csv")
+
+Data$Generation_No. <- as.numeric(as.character(Data$Generation_No.))
+Data$Relative_Load[Data$Relative_Load == "#DIV/0!"] <- 0
+Data$Relative_Load <- as.numeric(Data$Relative_Load)
+Data$year <- as.factor(format(as.Date(Data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+Data$year <- factor(Data$year, levels = sort(unique(Data$year)))
+
+mge = subset(Data, grepl("Bariloche|Uruguay|Rio Negro|Mendoza|Ascasubi|Porto Alegre|La Serena|Concepcion", Ecotype))
+mge$Generation_No. <- as.numeric(as.character(mge$Generation_No.))
+mge$Relative_Load[mge$Relative_Load == "#DIV/0!"] <- 0
+mge$Relative_Load <- as.numeric(mge$Relative_Load)
+mge <- mge%>%
+  mutate(point_shape = ifelse(Relative_Load == 0, 17, 19)) 
+
+
+
+#Old samples: 1996-1997
+New = subset(Data, grepl("F57|F58|F59|F60|F61|F62|F63|F64|F65|F66|F67|F68|F69|F70|F71|F72|F73|F74|F75", Sample))
+ggplot(New, aes(x=Ecotype, y= Relative_Load))+
+  scale_colour_viridis(discrete=T, direction=1)+
+  geom_point(alpha=0.5,
+             size=2)+
+  geom_boxplot(outlier.shape = NA, aes(group = Ecotype), fill=NA)+
+  ylab("Relative MhFV load")+
+  theme_bw()+
+  scale_y_continuous()
+
+#MhFVLoad per Generation in Ecotypes. 
+
+
+
+low_data <- subset(mge, Relative_Load <= 30)
+high_data <- subset(mge, Relative_Load > 30)
+
+# Create the low-load plot (normal scale)
+low_plot <- ggplot(low_data, aes(x = Generation_No., y = Relative_Load, color = Ecotype)) +
+  scale_colour_viridis(discrete = TRUE, direction = 1) +
+  geom_point(alpha = 0.5, size = 2) +
+  ylab("Relative MhFV load (≤ 30)") +
+  xlab("Generation_No.") +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(min(mge$Generation_No., na.rm = TRUE), 
+                                  max(mge$Generation_No., na.rm = TRUE), 
+                                  by = 4)) +
+  scale_y_continuous(breaks = seq(0, 30, by = 5), limits = c(0, 30))
+
+# Create the high-load plot (compressed scale)
+high_plot <- ggplot(high_data, aes(x = Generation_No., y = Relative_Load, color = Ecotype)) +
+  scale_colour_viridis(discrete = TRUE, direction = 1) +
+  geom_point(alpha = 0.5, size = 2) +
+  ylab("Relative MhFV load (> 30)") +
+  xlab("Generation_No.") +
+  theme_bw() +
+  scale_x_continuous(breaks = seq(min(mge$Generation_No., na.rm = TRUE), 
+                                  max(mge$Generation_No., na.rm = TRUE), 
+                                  by = 4)) +
+  scale_y_continuous(breaks = c(30, 50, 70, 100), limits = c(30, 100))
+
+combined_plot <- plot_grid(high_plot, low_plot, ncol = 1, align = "v", rel_heights = c(0.3, 0.7))
+print(combined_plot)
+
+shapiro <- shapiro.test(mge$Relative_Load)
+print(shapiro)
+
+
+combined_data <- bind_rows(brazil_data_filtered, rio_negro_data_filtered, uruguay_data_filtered, sc_data_filtered, ls_data_filtered, ba_data_filtered, as_data_filtered, mn_data_filtered)
+
+combined_data <- combined_data %>%
+  mutate(year = ifelse(year %in% c("1992", "1993"), "1992/1993", as.character(year))) %>%
+  filter(year %in% c("1992/1993", "1994", "1998")) %>%
+  mutate(year = factor(year, levels = c("1992/1993", "1994", "1998")))
+shapiro <- shapiro.test(combined_data$Relative_Load)
+print(shapiro)
+
+ggplot(combined_data, aes(x = year, y = Relative_Load)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(aes(color = Line), size = 2, width = 0.2, alpha = 0.5) +  # Add points with jitter
+  scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation by Line
+  ylab("Relative Virus Load") +
+  xlab("Year") +
+  theme_bw() +
+  theme(legend.position = "none")
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = combined_data )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(combined_data$Relative_Load, combined_data$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+######
+
+mge2 <- mge %>%
+  mutate(year = case_when(
+    year %in% c(1992, 1993) ~ "1992-1993",  
+    year %in% c(1995, 1996) ~ "1995-1996",  
+    TRUE ~ as.character(year) ))
+
+mge2$Infected <- ifelse(mge2$Relative_Load > 0, "Infected", "Uninfected")
+
+prevalence_mge <- mge2 %>%
+  group_by(year) %>%
+  summarise(
+    total_samples = n(),
+    infected_samples = sum(Infected == "Infected"),
+    prevalence = (infected_samples / total_samples) * 100,
+    ci = binom.confint(infected_samples, total_samples, methods = "wilson"),
+    ci_lower = ci$lower * 100,
+    ci_upper = ci$upper * 100
+  ) %>%
+  ungroup()
+
+contingency_table2 <- mge2 %>%
+  group_by(year) %>%
+  summarise(
+    infected = sum(Infected == "Infected"),
+    uninfected = sum(Infected == "Uninfected")
+  ) %>%
+  ungroup() %>%
+  select(infected, uninfected) %>%
+  as.matrix()
+
+pairwise_test <- pairwise_fisher_test(contingency_table2, p.adjust.method = "fdr")
+print(pairwise_test)
+prevalence_mge$year <- factor(prevalence_mge$year, levels = c("1992-1993", "1994", "1995-1996", "1997", "1998"))
+significant_results <- pairwise_test %>%
+filter(p.adj.signif != "ns")
+significant_results <- significant_results %>%
+max_y <- max(prevalence_combined$ci_upper, na.rm = TRUE) 
+
+p <- ggplot(prevalence_mge, aes(x = year, y = prevalence, fill = year)) +
+  geom_bar(stat = "identity", width = 0.8) +
+  geom_errorbar(aes(ymin = ci_lower, ymax = ci_upper), width = 0.2) +
+  ylab("Infection Prevalence (%)") +
+  xlab("Year") +
+  theme_minimal() +
+  theme(legend.position = "none") +
+  scale_fill_viridis(discrete = TRUE, direction = 1) +
+  scale_y_continuous(breaks = seq(0, 100, by = 20))
+
+viridis_colors <- scale_fill_viridis(discrete = TRUE, direction = 1)$palette(length(unique(prevalence_mge$year)))
+
+base_y_position <- max(prevalence_mge$ci_upper) + 0.2
+
+vertical_spacing <- 2 
+
+current_y_offset <- base_y_position
+
+for (i in 1:nrow(combined_significance)) {
+  group1_label <- combined_significance$group1[i]
+  group2_label <- combined_significance$group2[i]
+  annotation_text <- combined_significance$annotation[i]
+  
+  x2 <- which(unique(prevalence_mge$year) == group2_label)
+  
+  group_color <- viridis_colors[which(unique(prevalence_mge$year) == group1_label)]
+  
+  p <- p + 
+    annotate("text", x = x2,  
+             y = current_y_offset, 
+             label = annotation_text, 
+             size = 5, vjust = -0.5, 
+             color = group_color)  
+  
+ 
+  current_y_offset <- current_y_offset + vertical_spacing
+}
+
+
+print(p)
+
+### bar plot for virus load over time
+combined_data <- bind_rows(brazil_data_filtered, rio_negro_data_filtered, 
+                           uruguay_data_filtered, sc_data_filtered, 
+                           ls_data_filtered, ba_data_filtered, 
+                           as_data_filtered, mn_data_filtered)
+combined_data$year <- factor(combined_data$year, 
+                             levels = as.character(1992:1998))
+shapiro <- shapiro.test(combined_data$Relative_Load)
+print(shapiro)
+summary_data <- combined_data %>%
+  group_by(year) %>%
+  summarize(median_load = median(Relative_Load, na.rm = TRUE),
+            IQR_low = quantile(Relative_Load, 0.25, na.rm = TRUE),
+            IQR_high = quantile(Relative_Load, 0.75, na.rm = TRUE))
+
+ggplot(summary_data, aes(x = year, y = median_load, fill = year)) +  # Use fill aesthetic for bars
+  geom_bar(stat = "identity", alpha = 0.8) +  # Bar graph for medians
+  geom_errorbar(aes(ymin = IQR_low, ymax = IQR_high), width = 0.2) +  # IQR as error bars
+  geom_jitter(data = combined_data, aes(y = Relative_Load, color = year), 
+              size = 2, width = 0.2, alpha = 0.5) +  # Sample points with color
+  scale_fill_viridis(discrete = TRUE, direction = 1) +  # Fill colors for bars
+  scale_color_viridis(discrete = TRUE, direction = -1) +  # Color differentiation for points
+  scale_y_log10(breaks = c(1, 2, 5, 10, 20, 50),  # Custom breaks
+                labels = c("1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(1, 50)) +  # Limit y-axis for better focus
+  ylab("Median Relative Virus Load (Scale x Log10)") +
+  xlab("Year") +
+  theme_bw() +
+  theme(legend.position = "none")
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = combined_data )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(combined_data $Relative_Load, combined_data $year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+ggplot(combined_data, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  
+  scale_y_log10(breaks = c(1, 2, 5, 10, 20, 50),  # Custom breaks
+               labels = c("1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(1, 50)) +  # Limit y-axis for better focus
+  ylab("Relative MhFV Load (Scale x Log10)") +
+  xlab("Year") +  
+  theme_bw() +
+  theme(legend.position = "none")+
+  scale_x_discrete()
+  
+
+
+
+# MhFV load over time (years) based on ecotype. 
+#Average BR MhFV load based on dates
+
+brazil_data <- subset(mge, Ecotype == "Porto Alegre" & !is.na(sample_collection_date))
+brazil_data$year <- as.factor(format(as.Date(brazil_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+brazil_data$year <- factor(brazil_data$year, levels = sort(unique(brazil_data$year)))
+brazil_data$Line <- gsub(".*(BR[0-9]+).*", "\\1", brazil_data$Sample)
+
+brazil_data_filtered <- subset(brazil_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(brazil_data_filtered$Relative_Load, brazil_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+
+colnames(sig_pairs) <- c("year2", "year1", "p_value", "label")
+comparisons <- list( c("1993", "1998"))
+max_y <- max(brazil_data_filtered$Relative_Load, na.rm = TRUE)
+
+ggplot(brazil_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() +
+  scale_y_continuous()
+
+
+shapiro <- shapiro.test(brazil_data_filtered$Relative_Load)
+print(shapiro)
+
+anova_result <- aov(Relative_Load ~ year, data = brazil_data_filtered)
+summary(anova_result)
+tukey_result <- TukeyHSD(anova_result, p.adjust.method = "fdr")
+print(tukey_result)
+summary_data <- brazil_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+#Average RN MhFV load based on dates
+
+rio_negro_data  <- subset(mge, Ecotype == "Rio Negro" & !is.na(sample_collection_date))
+rio_negro_data$year <- as.factor(format(as.Date(rio_negro_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+rio_negro_data$year <- factor(rio_negro_data$year, levels = sort(unique(rio_negro_data$year)))
+rio_negro_data$Line <- gsub(".*(RN[0-9]+).*", "\\1", rio_negro_data$Sample)
+low_data <- subset(rio_negro_data, Relative_Load <= 30)
+high_data <- subset(rio_negro_data, Relative_Load > 30)
+
+rio_negro_data_filtered <- subset(rio_negro_data , !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(rio_negro_data_filtered$Relative_Load, rio_negro_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+
+
+ high_data <- ggplot(ur6_data, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation for lines
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  scale_y_log10(breaks = c(1, 2, 5, 10, 20, 50),  # Custom breaks
+                labels = c("1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(1, 50)) +  # Limit y-axis for better focus
+  ylab("Relative MhFV Load (Scale x Log10)") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() 
+
+low_data <- ggplot(ur6_data, aes(x = label, y = Relative_Load)) +
+   scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation for lines
+  geom_point( alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Generation (Year)") +  
+   theme_bw() +
+   scale_x_discrete()+
+  scale_y_continuous(breaks = c(0,2,4,6,8,10), limits = c(0,10))
+
+   
+high_data <- ggplot(ur6_data, aes(x = label, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation for lines
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +
+  ylab("Relative MhFV Load") +
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous(breaks = c( 50, 55, 60), limits = c(50, 60))+
+  theme(axis.title.x = element_blank(),  # Remove x-axis title
+        axis.text.x = element_blank(),   # Remove x-axis labels
+        axis.ticks.x = element_blank(), 
+        axis.title.y = element_blank(),
+        legend.position = "none")
+# Combine the two plots into one
+combined_plot <- plot_grid(high_data, low_data, ncol = 1, align = "v", rel_heights = c(0.2, 0.8))
+
+# Display the combined plot
+print(combined_plot)
+
+shapiro <- shapiro.test(rio_negro_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = rio_negro_data_filtered )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(rio_negro_data_filtered$Relative_Load, rio_negro_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+summary_stats <- rio_negro_data_filtered %>%
+  group_by(year) %>%
+  summarize(
+    mean_Relative_Load = mean(Relative_Load, na.rm = TRUE),  # Mean
+    sd_Relative_Load = sd(Relative_Load, na.rm = TRUE)       # Standard deviation
+  )
+
+# Print the result
+print(summary_stats)
+
+
+
+#Average UR MhFV load based on dates
+
+uruguay_data  <- subset(mge, Ecotype == "Uruguay" & !is.na(sample_collection_date))
+uruguay_data$year <- as.factor(format(as.Date(uruguay_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+uruguay_data$year <- factor(uruguay_data$year, levels = sort(unique(uruguay_data$year)))
+uruguay_data$Line <- gsub(".*(UR[0-9]+).*", "\\1", uruguay_data$Sample)
+low_data <- subset(rio_negro_data, Relative_Load <= 20)
+high_data <- subset(rio_negro_data, Relative_Load > 50)
+
+uruguay_data_filtered <- subset(uruguay_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(uruguay_data_filtered$Relative_Load, uruguay_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+ggplot(uruguay_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous() 
+
+shapiro <- shapiro.test(uruguay_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = uruguay_data_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(uruguay_data_filtered$Relative_Load, uruguay_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+summary_data <- uruguay_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+#Average SC MhFV load based on dates
+
+sc_data  <- subset(mge, Ecotype == "Concepcion" & !is.na(sample_collection_date))
+sc_data$year <- as.factor(format(as.Date(sc_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+sc_data$year <- factor(sc_data$year, levels = sort(unique(sc_data$year)))
+sc_data$Line <- gsub(".*(SC[0-9]+).*", "\\1", sc_data$Sample)
+
+sc_data_filtered <- subset(sc_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(sc_data_filtered$Relative_Load, sc_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+
+
+ggplot(sc_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  scale_y_log10(breaks = c(1, 2, 5, 10, 20, 50),  # Custom breaks
+                labels = c("1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(1, 50)) +  # Limit y-axis for better focus
+  ylab("Relative MhFV Load (Scale x Log10)") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() 
+
+shapiro <- shapiro.test(sc_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = sc_data_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(sc_data_filtered$Relative_Load, sc_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+summary_data <- sc_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+#Average LS MhFV load based on dates
+
+ls_data   <- subset(mge, Ecotype == "La Serena" & !is.na(sample_collection_date))
+ls_data$year <- as.factor(format(as.Date(ls_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ls_data$year <- factor(ls_data$year, levels = sort(unique(ls_data$year)))
+ls_data$Line <- gsub(".*(LS[0-9]+).*", "\\1", ls_data$Sample)
+
+ls_data_filtered <- subset(ls_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(ls_data_filtered$Relative_Load, ls_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+
+ggplot(ls_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous() 
+
+shapiro <- shapiro.test(ls_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = ls_data_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(ls_data_filtered$Relative_Load, ls_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+summary_data <- ls_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+
+#Average BA MhFV load based on dates
+
+ba_data  <- subset(mge, Ecotype == "Bariloche" & !is.na(sample_collection_date))
+ba_data$year <- as.factor(format(as.Date(ba_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ba_data$year <- factor(ba_data$year, levels = sort(unique(ba_data$year)))
+ba_data$Line <- gsub(".*(BA[0-9]+).*", "\\1", ba_data$Sample)
+
+ba_data_filtered <- subset(ba_data, !is.na(Relative_Load) & Relative_Load > 0)
+
+# Perform Tukey's test for significant pairwise comparisons
+anova_result <- aov(Relative_Load ~ year, data = ba_data_filtered)
+tukey_result <- TukeyHSD(anova_result, p.adjust.method = "fdr")
+
+# Extract significant comparisons
+sig_pairs <- as.data.frame(tukey_result$year)
+sig_pairs <- sig_pairs[sig_pairs$`p adj` < 0.05, ]
+
+# Prepare the comparisons for the significance bars
+comparisons <- list(c("1994", "1998"))  # Only significant comparison
+
+# Set the maximum y-value for spacing the significance bars
+max_y <- max(ba_data_filtered$Relative_Load, na.rm = TRUE)
+
+# Create the plot
+ggplot(ba_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous() +
+  # Add significance bars for the significant comparison
+  geom_signif(comparisons = comparisons,
+              y_position = max_y + 2,  # Adjust for visual spacing
+              annotations = "*",  # Use asterisks for significance
+              tip_length = 0.03, 
+              textsize = 5)  
+
+shapiro <- shapiro.test(ba_data_filtered$Relative_Load)
+print(shapiro)
+
+anova_result <- aov(Relative_Load ~ year, data = ba_data_filtered)
+summary(anova_result)
+tukey_result <- TukeyHSD(anova_result, p.adjust.method = "fdr")
+print(tukey_result)
+summary_data <- ba_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+
+
+
+#Average AS MhFV load based on dates
+
+as_data  <- subset(mge, Ecotype == "Ascasubi" & !is.na(sample_collection_date))
+as_data$year <- as.factor(format(as.Date(as_data $sample_collection_date, format = "%d/%m/%y"), "%Y"))
+as_data$year <- factor(as_data $year, levels = sort(unique(as_data $year)))
+as_data$Line <- gsub(".*(AS[0-9]+).*", "\\1", as_data $Sample)
+
+as_data_filtered <- subset(as_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(as_data_filtered$Relative_Load, as_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+ggplot(as_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous() 
+
+shapiro <- shapiro.test(as_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = as_data_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(as_data_filtered$Relative_Load, as_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+summary_data <- as_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
+
+#Average MN MhFV load based on dates
+
+mn_data  <- subset(mge, Ecotype == "Mendoza" & !is.na(sample_collection_date))
+mn_data$year <- as.factor(format(as.Date(mn_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+mn_data$year <- factor(mn_data$year, levels = sort(unique(mn_data$year)))
+mn_data$Line <- gsub(".*(MN[0-9]+).*", "\\1", mn_data $Sample)
+
+
+mn_data_filtered <- subset(mn_data, !is.na(Relative_Load) & Relative_Load > 0)
+pairwise_wilcox <- pairwise.wilcox.test(mn_data_filtered$Relative_Load, mn_data_filtered$year, p.adjust.method = "fdr")
+sig_pairs <- as.data.frame(as.table(pairwise_wilcox$p.value))
+sig_pairs <- sig_pairs %>%
+  filter(Freq < 0.05) %>%
+  mutate(label = ifelse(Freq < 0.001, "***", 
+                        ifelse(Freq < 0.01, "**", 
+                               ifelse(Freq < 0.05, "*", NA)))) %>%
+  filter(!is.na(label))
+
+
+colnames(sig_pairs) <- c("year2", "year1", "p_value", "label")
+comparisons <- list( c("1994", "1998"))
+max_y <- max(ba_data_filtered$Relative_Load, na.rm = TRUE)
+
+ggplot(mn_data_filtered, aes(x = year, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) + 
+  geom_point(aes(color = Line), alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0)) +
+  geom_boxplot(outlier.shape = NA, aes(group = year), fill = NA) +  # Group boxplots by year
+  ylab("Relative MhFV Load") +
+  xlab("Year") +  
+  theme_bw() +
+  scale_x_discrete() + 
+  scale_y_continuous() 
+
+shapiro <- shapiro.test(mn_data_filtered$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ year, data = mn_data_filtered)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(mn_data_filtered$Relative_Load, mn_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
+summary_data <- mn_data_filtered %>%
+  group_by(year) %>%
+  summarise(
+    count = n(),
+    mean_load = mean(Relative_Load, na.rm = TRUE),
+    median_load = median(Relative_Load, na.rm = TRUE),
+    sd_load = sd(Relative_Load, na.rm = TRUE),
+    min_load = min(Relative_Load, na.rm = TRUE),
+    max_load = max(Relative_Load, na.rm = TRUE)
+  )
+
+# View the summary data
+print(summary_data)
