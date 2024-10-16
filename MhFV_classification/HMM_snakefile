@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+
+###############
+# CONTAINERS ##
+###############
+
+clustalo_container = 'docker://biocontainers/clustalo:v1.2.4-2-deb_cv1'
+hmmer_container = 'docker://staphb/hmmer:3.4'
+
+missing_genes = ["lef5", "p6.9", "LbFVorf23like", "LbFVorf54like"]
+
+#########
+# RULES #
+#########
+
+rule target:
+    input:
+    	expand('output/04_hmmer/{gene}.domtblout', gene = missing_genes)
+
+
+rule hmmerscan:
+	input: 
+		hmmerbuild = 'output/04_hmmer/{gene}.hmm',
+		hmmpress = 'output/04_hmmer/{gene}.hmm.h3m',
+		mhfv = 'data/MhFV_proteins.fa'
+	output: 
+		'output/04_hmmer/{gene}.domtblout'
+	log:
+		'output/logs/hmmerscan_{gene}.log'
+	threads:
+		40
+	singularity:
+		hmmer_container
+	shell:
+		'hmmscan '
+		'--cpu {threads} '
+		'--domtblout {output} '
+		'{input.hmmerbuild} '
+		'{input.mhfv} '
+		'&> {log}'
+
+rule hmmpress:
+	input: 
+		'output/04_hmmer/{gene}.hmm'
+	output:
+		'output/04_hmmer/{gene}.hmm.h3m'
+	log:
+		'output/logs/hmmpress_{gene}.log'
+	singularity: 
+		hmmer_container
+	shell: 
+		'hmmpress '
+		'{input} '
+		'&> {log}'
+
+
+rule hmmerbuild:
+	input:
+		'output/03_clustalo/{gene}.fasta'
+	output: 
+		'output/04_hmmer/{gene}.hmm'
+	log:
+		'output/logs/hmmerbuild_{gene}.log'
+	threads:
+		40
+	singularity:
+		hmmer_container
+	shell:
+		'nice hmmbuild '
+		'--cpu {threads} '
+		'{output} '
+		'{input} '
+		'&> {log}'
+
+
+rule clustalo:
+	input:
+		'data/core-genes/{gene}.fasta'
+	output:
+		'output/03_clustalo/{gene}.fasta'
+	log:
+		'output/logs/clustalo_{gene}.log'
+	threads:
+		40
+	singularity:
+		clustalo_container
+	shell:
+		'nice clustalo '
+		'--in {input} '
+		'--out {output} '
+		'--threads {threads} '
+		'&> {log}'
