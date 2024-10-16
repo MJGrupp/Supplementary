@@ -1,5 +1,8 @@
 #relative load per generation for isofemale lines
+library(data.table)
 library(ggplot2)
+library(ggtext)
+
 
 sc8_data <- subset(mge, grepl("SC8", Sample))
 sc8_data$Generation_No. <- factor(sc8_data$Generation_No.)
