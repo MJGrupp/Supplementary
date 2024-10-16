@@ -1,0 +1,49 @@
+##Timecourse qPCR
+Time <- subset(Data, grepl("Day",Sample))
+Time$Relative_Load <- as.numeric(Time$Relative_Load)
+Time <- Time %>%
+  mutate(Day = factor(Day))
+
+# Plot with 'Day' as a factor
+ggplot(Time, aes(x = Day, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation for lines
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0.2)) +
+  geom_boxplot(outlier.shape = NA, aes(group = Day), fill = NA) +  # Group boxplots by factor levels
+  ylab("Relative MhFV Load") +
+  xlab("Days Post Eclosion") +  
+  theme_bw() +
+  scale_x_discrete() +  # Use discrete scale since 'Day' is now a factor
+  scale_y_continuous()
+
+shapiro <- shapiro.test(Time$Relative_Load)
+print(shapiro)
+anova_result <- aov(Relative_Load ~ Day, data = Time)
+summary(anova_result)
+tukey_result <- TukeyHSD(anova_result, p.adjust.method = "fdr")
+print(tukey_result)
+
+#### Tissue
+
+Tissue <- Time <- subset(Data, grepl("[A-Za-z]",Tissue))
+Tissue$Relative_Load <- as.numeric(Tissue$Relative_Load)
+
+ggplot(Tissue, aes(x = Tissue, y = Relative_Load)) +
+  scale_color_viridis(discrete = TRUE, direction = 1) +  # Color differentiation for points
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2)) +
+  
+  
+  ylab("Relative MhFV Load (Scale x Log10)") +
+  xlab("Tissue Type") +  
+  theme_bw() +
+  theme(axis.text.x = element_text(angle = 25, hjust = 1)) +
+  scale_y_log10(breaks = c(0.1, 0.5, 1, 2, 5, 10, 20, 50),  # Custom breaks
+                labels = c("0.1", "0.5", "1", "2", "5", "10", "20", "50")) +  # Custom labels
+  coord_cartesian(ylim = c(0.1, 50)) +
+  scale_x_discrete()
+shapiro <- shapiro.test(Tissue$Relative_Load)
+print(shapiro)
+
+kruskal_test <- kruskal.test(Relative_Load ~ Day, data = Tissue)
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(ba_data_filtered$Relative_Load, ba_data_filtered$year, p.adjust.method = "fdr")
+print(pairwise_wilcox)
