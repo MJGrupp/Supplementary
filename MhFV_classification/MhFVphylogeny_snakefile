@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+muscle_container = 'docker://nanozoo/muscle:3.8.31--b38d5b8'
+trimal_container = 'docker://evolbioinfo/trimal:v1.4.1'
+modeltest_ng_container = 'docker://nanozoo/modeltest-ng:0.1.6--06cdfc1'
+raxmlng_container = 'docker://staphb/raxml-ng:1.2.2'
+#########
+# RULES #
+#########
+rule target:
+    input: 
+    	'output/03_modeltest/modeltest.out',
+    	'output/04raxmlng/check/check.raxml.log',
+    	'output/04raxmlng/all/BLOSUM62+I+G4+F.raxml.bestTree'
+    	
+rule raxmlng_all:
+	input:
+		'output/02_trimal/trimal.fas'
+	output:
+		'output/04raxmlng/all/BLOSUM62+I+G4+F.raxml.bestTree'
+	params:
+		prefix= 'output/04raxmlng/all/BLOSUM62+I+G4+F'
+	singularity:
+		raxmlng_container
+	log:
+		'output/logs/04raxmlng_all'
+	threads:
+		40
+	shell:
+		'raxml-ng '
+		'--all '
+		'--msa {input} '
+		'--model BLOSUM62+I+G4+F '
+		'--bs-trees 1000 '
+		'--threads {threads} '
+		'--prefix {params.prefix} '
+		'--seed 1 '
+		'&> {log}'
+
+rule raxmlng_check:
+	input:
+		'output/02_trimal/trimal.fas'
+	output:
+		'output/04raxmlng/check/check.raxml.log'
+	params: 
+		wd= 'output/04raxmlng/check',
+		prefix=  'output/04raxmlng/check/check'
+	singularity:
+		raxmlng_container
+	shell:
+		'mkdir -p {params.wd} || exit 1 ; '
+		'raxml-ng '
+		'--check '
+		'--msa {input} '
+		'--model BLOSUM62+I+G4+F '
+		'--prefix {params.prefix}'
+
+rule model_test:
+	input:
+		'output/02_trimal/trimal.fas'
+	output:
+		'output/03_modeltest/modeltest.out'
+	params:
+		prefix= 'output/03_modeltest/modeltest'
+	log:
+		'output/logs/model_test.log'
+	threads:
+		40 
+	singularity:
+		modeltest_ng_container
+	shell: 
+		'modeltest-ng '
+		'--input {input} '
+		'--output {params.prefix} '
+		'--datatype aa '
+		'--models +LG4X,LG4M '
+		'-p {threads} '
+		'&> {log}' 
+
+rule trimal_alignment:
+	input:
+		'output/01_muscle/FcC_supermatrix.fas'
+	output:
+		'output/02_trimal/trimal.fas'
+	singularity:
+		trimal_container
+	log:
+		'output/logs/trimal_alignment.log'
+	shell:
+		'trimal '
+		'-in {input} '
+		'-out {output} '
+		'-gapthreshold 0.6 '
+		'&> {log}'
+
+rule concat_alignment:
+	input: 
+		expand('output/01_muscle/{gene}.fasta',gene=["ac81", "DNAP", "helicase", "lef-5", "lef-8", "lef-9", "p33", "pif-0", "pif-1", "pif-2", "pif-3", "pif-5"])
+	output:
+		'output/01_muscle/FcC_supermatrix.fas'
+	params:
+		wd = 'output/01_muscle'
+	shell:
+		'cd {params.wd} || exit 1 ; '
+		'perl /Volumes/archive/deardenlab/jacobgrupp/phylogenetictree/scripts/FASconCAT-G_v1.06.1.pl -s '
+
+rule muscle_align:
+	input: 
+		'data/core_genes/{gene}.fasta'
+	output:
+		'output/01_muscle/{gene}.fasta'
+	log:
+		'output/logs/muscle_align/{gene}.log'
+	singularity:
+		muscle_container
+	shell:
+		'muscle ' 
+		'-in {input} ' 
+		'-out {output} '
+		'-log {log}' 
