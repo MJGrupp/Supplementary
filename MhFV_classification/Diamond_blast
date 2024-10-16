@@ -1,0 +1,188 @@
+#01_diamond_db #snakefile
+#!/usr/bin/env bash
+
+set -eu
+
+singularity exec -B /Volumes diamond_2.1.9.sif \
+diamond makedb \
+--in data/FV_predicted_genes.faa \
+--db output/01_diamond_db/FV_predicted_genes \
+--threads 20
+
+
+#02_diamond_blastp #snakefile
+#!/usr/bin/env bash
+set -eu
+
+singularity exec -B /Volumes diamond_2.1.9.sif \
+diamond blastp \
+--query data/MhFV_proteins.fa \
+--db output/01_diamond_db/FV_predicted_genes.dmnd \
+--threads 40 \
+--ultra-sensitive \
+--outfmt 6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore stitle \
+--out output/02_diamond_blastp/blastpultrasensitive.outfmt6 
+
+
+
+####core gene hit investigation in R
+
+
+library(data.table)
+library(dplyr)
+
+## MhFV genes diamond blastp against a database made containing all FVs
+
+diamond_blastp_FVs_blast_res <- fread("output/02_diamond_blastp/blastpultrasensitive.outfmt6")
+
+setnames(diamond_blastp_FVs_blast_res, old=c("V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10", "V11", "V12", "V13"),
+         new=c("query", "subject", "FVs_%_identical_matches", "alignment_length", "no_mismatches", "no_gap_openings",
+               "query_start", "query_end", "subject_start", "subject_end", "FVs_evalue", "bit_score", "FVs_hit"))
+
+
+##order so that in event of eval min. tie, which.min takes hit with highest bitscore
+setorder(diamond_blastp_FVs_blast_res, query, FVs_evalue, -bit_score, -`FVs_%_identical_matches`)
+##extract result with lowest evalue for each peptide, sorted by bit-value in case of e-value tie
+diamond_blastp_FVs_min_evalues <- diamond_blastp_FVs_blast_res[,.SD[which.min(FVs_evalue)], by=query]
+
+#generate another column by extracting virus names
+diamond_blastp_FVs_blast_res$Species <- gsub(".*\\[([^]]+)\\].*", "\\1", diamond_blastp_FVs_blast_res$FVs_hit)
+
+
+# Create a new column 'Core_Gene' based on patterns in 'FVs_hit'
+diamond_blastp_FVs_blast_res <- diamond_blastp_FVs_blast_res %>%
+  mutate(Core_Gene = case_when(
+    grepl("LbFV-ORF23-|lbfv-orf23 |lbfv_orf23-|lbfv_orf23 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF23",
+    grepl("LbFV-ORF54-|lbfv-orf54 |lbfv_orf54-|lbfv_orf54 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF54",
+    grepl("lef-5", FVs_hit, ignore.case = TRUE) ~ "lef5",
+    grepl("p6.9", FVs_hit, ignore.case = TRUE) ~ "p6.9",
+    
+    # Additional mappings for present genes
+    grepl("LbFV-ORF87-|lbfv-orf87 |lbfv_orf87-|lbfv_orf87 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF87",
+    grepl("LbFV-ORF5-|lbfv-orf5 |lbfv_orf5-|lbfv_orf5 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF5",
+    grepl("LbFV_ORF94-|lbfv-orf94 |lbfv_orf94-|lbfv_orf94 |LbFV-orf94-|LbFV-orf094-", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF94",
+    grepl("LbFV_ORF99-|lbfv-orf99- |lbfv_orf99-|lbfv_orf99 | LbFV-orf99-like ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF99",
+    grepl("LbFV_ORF20-|lbfv-orf20 |lbfv_orf20-|lbfv_orf20 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF20",
+    grepl("LbFV_ORF102-|lbfv-orf102 |lbfv_orf102-|lbfv_orf102 |LbFV-orf102-like ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF102",
+    
+    grepl("lef-4", FVs_hit, ignore.case = TRUE) ~ "lef4",
+    grepl("lef-8", FVs_hit, ignore.case = TRUE) ~ "lef8",
+    grepl("lef-9", FVs_hit, ignore.case = TRUE) ~ "lef9",
+    
+    grepl("dna pol", FVs_hit, ignore.case = TRUE) ~ "dnap",
+    grepl("helicase", FVs_hit, ignore.case = TRUE) ~ "helicase",
+    grepl("integrase", FVs_hit, ignore.case = TRUE) ~ "integrase",
+    grepl("PD", FVs_hit, ignore.case = TRUE) ~ "PD",
+    grepl("LbFV_ORF92-|lbfv-orf92 |lbfv_orf92-|lbfv_orf92 ", FVs_hit, ignore.case = TRUE) ~ "LbFV_ORF92",
+    
+    grepl("p33", FVs_hit, ignore.case = TRUE) ~ "p33",
+    grepl("Ac81", FVs_hit, ignore.case = TRUE) ~ "Ac81",
+    grepl("38K", FVs_hit, ignore.case = TRUE) ~ "K38",
+    grepl("Ac38", FVs_hit, ignore.case = TRUE) ~ "Ac38",
+    grepl("Lcat", FVs_hit, ignore.case = TRUE) ~ "Lcat",
+    grepl("ATPase", FVs_hit, ignore.case = TRUE) ~ "ATPase",
+    
+    grepl("p74", FVs_hit, ignore.case = TRUE) ~ "p74",
+    grepl("pif-1", FVs_hit, ignore.case = TRUE) ~ "pif1",
+    grepl("pif-2", FVs_hit, ignore.case = TRUE) ~ "pif2",
+    grepl("pif-3", FVs_hit, ignore.case = TRUE) ~ "pif3",
+    grepl("pif-5", FVs_hit, ignore.case = TRUE) ~ "pif5",
+    
+    TRUE ~ NA_character_  # Default if no match found
+  ))
+
+# View the new dataframe with 'Core_Gene' column
+head(diamond_blastp_FVs_blast_res)
+
+
+#missing
+LbFV_ORF23 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV-ORF23-|lbfv-orf23 |lbfv_orf23-|lbfv_orf23 ", FVs_hit, ignore.case=T))
+LbFV_ORF54 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV-ORF54-|lbfv-orf54 |lbfv_orf54-|lbfv_orf54 ", FVs_hit, ignore.case=T))
+lef5 <- subset(diamond_blastp_FVs_blast_res, grepl("lef-5", FVs_hit, ignore.case=T))
+p6.9 <- subset(diamond_blastp_FVs_blast_res, grepl("p6.9", FVs_hit, ignore.case=T))
+
+# present
+LbFV_ORF87 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV-ORF87-|lbfv-orf87 |lbfv_orf87-|lbfv_orf87 ", FVs_hit, ignore.case=T))
+LbFV_ORF5 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV-ORF5-|lbfv-orf5 |lbfv_orf5-|lbfv_orf5 ", FVs_hit, ignore.case=T))
+LbFV_ORF94 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF94-|lbfv-orf94 |lbfv_orf94-|lbfv_orf94 |LbFV-orf94-|LbFV-orf094-", FVs_hit, ignore.case=T))
+LbFV_ORF99 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF99-|lbfv-orf99- |lbfv_orf99-|lbfv_orf99 | LbFV-orf99-like ", FVs_hit, ignore.case=T))
+LbFV_ORF20 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF20-|lbfv-orf20 |lbfv_orf20-|lbfv_orf20 ", FVs_hit, ignore.case=T))
+LbFV_ORF102 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF102-|lbfv-orf102 |lbfv_orf102-|lbfv_orf102 |LbFV-orf102-like ", FVs_hit, ignore.case=T))
+
+lef4 <- subset(diamond_blastp_FVs_blast_res, grepl("lef-4", FVs_hit, ignore.case=T))
+lef8 <- subset(diamond_blastp_FVs_blast_res, grepl("lef-8", FVs_hit, ignore.case=T))
+lef9 <- subset(diamond_blastp_FVs_blast_res, grepl("lef-9", FVs_hit, ignore.case=T))
+
+dnap <- subset(diamond_blastp_FVs_blast_res, grepl("dna pol", FVs_hit, ignore.case=T))
+helicase <- subset(diamond_blastp_FVs_blast_res, grepl("helicase", FVs_hit, ignore.case=T))
+integrase <- subset(diamond_blastp_FVs_blast_res, grepl("integrase", FVs_hit, ignore.case=T))
+PD <- subset(diamond_blastp_FVs_blast_res, grepl("PD", FVs_hit, ignore.case=T))
+LbFV_ORF92 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF92-|lbfv-orf92 |lbfv_orf92-|lbfv_orf92 ", FVs_hit, ignore.case=T))
+
+p33 <- subset(diamond_blastp_FVs_blast_res, grepl("p33", FVs_hit, ignore.case=T))
+#LbFV_ORF97 <- subset(diamond_blastp_FVs_blast_res, grepl("LbFV_ORF97-|lbfv-orf97 |lbfv_orf97-|lbfv_orf97 ", FVs_hit, ignore.case=T))
+#Same MhFV ORF hit as p33
+
+Ac81 <- subset(diamond_blastp_FVs_blast_res, grepl("Ac81", FVs_hit, ignore.case=T))
+K38 <- subset(diamond_blastp_FVs_blast_res, grepl("38K", FVs_hit, ignore.case=T))
+Ac38 <- subset(diamond_blastp_FVs_blast_res, grepl("Ac38", FVs_hit, ignore.case=T))
+Lcat <- subset(diamond_blastp_FVs_blast_res, grepl("Lcat", FVs_hit, ignore.case=T))
+ATPase <- subset(diamond_blastp_FVs_blast_res, grepl("ATPase", FVs_hit, ignore.case=T))
+
+p74 <- subset(diamond_blastp_FVs_blast_res, grepl("p74", FVs_hit, ignore.case=T))
+pif1 <- subset(diamond_blastp_FVs_blast_res, grepl("pif-1", FVs_hit, ignore.case=T))
+pif2 <- subset(diamond_blastp_FVs_blast_res, grepl("pif-2", FVs_hit, ignore.case=T))
+pif3 <- subset(diamond_blastp_FVs_blast_res, grepl("pif-3", FVs_hit, ignore.case=T))
+pif5 <- subset(diamond_blastp_FVs_blast_res, grepl("pif-5", FVs_hit, ignore.case=T))
+
+
+
+#MhFV ORF with core gene hits (all hits per core gene orf)
+MhFV_ORF80 <- subset(diamond_blastp_FVs_blast_res, query == "ORF80") #LbFV_ORF87
+MhFV_ORF36 <- subset(diamond_blastp_FVs_blast_res, query == "ORF36") #LbFV_ORF94
+MhFV_ORF142 <- subset(diamond_blastp_FVs_blast_res, query == "ORF142") #LbFV_ORF99
+MhFV_ORF11 <- subset(diamond_blastp_FVs_blast_res, query == "ORF11") #LbFV_ORF5
+MhFV_ORF128 <- subset(diamond_blastp_FVs_blast_res, query == "ORF128") #LbFV_ORF20
+MhFV_ORF123 <- subset(diamond_blastp_FVs_blast_res, query == "ORF123") #LbFV_ORF102
+
+MhFV_ORF91 <- subset(diamond_blastp_FVs_blast_res, query == "ORF91") #lef-4
+MhFV_ORF112 <- subset(diamond_blastp_FVs_blast_res, query == "ORF112") #lef-8
+MhFV_ORF141 <- subset(diamond_blastp_FVs_blast_res, query == "ORF141") #lef-9
+
+MhFV_ORF4 <- subset(diamond_blastp_FVs_blast_res, query == "ORF4") #dnap
+MhFV_ORF5 <- subset(diamond_blastp_FVs_blast_res, query == "ORF5") #dnap
+MhFV_ORF6 <- subset(diamond_blastp_FVs_blast_res, query == "ORF6") #dnap
+MhFV_ORF148 <- subset(diamond_blastp_FVs_blast_res, query == "ORF148") #helicase
+MhFV_ORF31 <- subset(diamond_blastp_FVs_blast_res, query == "ORF31") #helicase
+MhFV_ORF89 <- subset(diamond_blastp_FVs_blast_res, query == "ORF89") #integrase
+MhFV_ORF132 <- subset(diamond_blastp_FVs_blast_res, query == "ORF132") #PD
+MhFV_ORF31 <- subset(diamond_blastp_FVs_blast_res, query == "ORF31") #LbFV_ORF92
+
+MhFV_ORF127 <- subset(diamond_blastp_FVs_blast_res, query == "ORF127") #p33
+MhFV_ORF78 <- subset(diamond_blastp_FVs_blast_res, query == "ORF78") #Ac81
+MhFV_ORF74 <- subset(diamond_blastp_FVs_blast_res, query == "ORF74") #Lcat
+MhFV_ORF83 <- subset(diamond_blastp_FVs_blast_res, query == "ORF83") #38K
+MhFV_ORF126 <- subset(diamond_blastp_FVs_blast_res, query == "ORF126") #Ac38
+MhFV_ORF144 <- subset(diamond_blastp_FVs_blast_res, query == "ORF144") #ATPase
+MhFV_ORF143 <- subset(diamond_blastp_FVs_blast_res, query == "ORF143") #ATPase
+
+MhFV_ORF40 <- subset(diamond_blastp_FVs_blast_res, query == "ORF40") #p74
+MhFV_ORF97 <- subset(diamond_blastp_FVs_blast_res, query == "ORF97") #pif-1
+MhFV_ORF71 <- subset(diamond_blastp_FVs_blast_res, query == "ORF71") #pif-2
+MhFV_ORF2 <- subset(diamond_blastp_FVs_blast_res, query == "ORF2") #pif-3
+MhFV_ORF63 <- subset(diamond_blastp_FVs_blast_res, query == "ORF63") #pif-5
+
+
+#making the table. 
+# Create a summarized table for Core_gene with associated MhFV ORF and Species
+summary_table <- diamond_blastp_FVs_blast_res %>%
+  group_by(Core_Gene) %>% 
+  summarise(
+    MhFV_ORF = paste(unique(query), collapse = ", "),  # Concatenate unique MhFV ORFs
+    Species = paste(unique(Species), collapse = ", ")  # Concatenate unique Species
+  ) %>%
+  filter(!is.na(Core_Gene))  # Ensure only rows with core genes are included
+
+# View the summarized table
+print(summary_table)
+
