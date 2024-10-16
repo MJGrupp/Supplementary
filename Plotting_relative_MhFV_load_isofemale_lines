@@ -1,0 +1,215 @@
+#relative load per generation for isofemale lines
+library(ggplot2)
+
+sc8_data <- subset(mge, grepl("SC8", Sample))
+sc8_data$Generation_No. <- factor(sc8_data$Generation_No.)
+sc8_data$year <- as.factor(format(as.Date(sc8_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+sc8_data$year <- factor(sc8_data$year, levels = sort(unique(sc8_data$year)))
+
+
+sc8_data$label <- paste(sc8_data$Generation_No., "\n(", sc8_data$year, ")", sep = "")
+
+# Step 2: Plot with the new combined label on the x-axis
+ggplot(sc8_data, aes(x = label, y = Relative_Load)) +
+  geom_boxplot(aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +  # Update x-axis label
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) + 
+  scale_y_continuous()
+
+
+
+as6_data <- subset(mge, grepl("AS6", Sample))
+as6_data$Generation_No. <- factor(as6_data$Generation_No.)
+as6_data$year <- as.factor(format(as.Date(as6_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+as6_data$year <- factor(as6_data$year, levels = sort(unique(as6_data$year)))
+
+
+as6_data$label <- paste(as6_data$Generation_No., "\n(", as6_data$year, ")", sep = "")
+
+# Generate the boxplot
+ggplot(as6_data, aes(x = label, y = Relative_Load)) +
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+shapiro <- shapiro.test(as6_data$Relative_Load)
+print(shapiro)#
+kruskal_test <- kruskal.test(Relative_Load ~ Generation_No., data = as6_data )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(as6_data$Relative_Load, as6_data$Generation_No., p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+
+
+as9_data <- subset(mge, grepl("AS9", Sample))
+as9_data$Generation_No. <- factor(as9_data$Generation_No.)
+as9_data$year <- as.factor(format(as.Date(as9_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+as9_data$year <- factor(as9_data$year, levels = sort(unique(as9_data$year)))
+
+
+as9_data$label <- paste(as9_data$Generation_No., "\n(", as6_data$year, ")", sep = "")
+# Generate the boxplot
+ggplot(as9_data, aes(x = label, y = Relative_Load)) +
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+shapiro <- shapiro.test(as9_data$Relative_Load)
+print(shapiro)#is normal, use different test. 
+anova_result <- aov(Relative_Load ~ year, data = as9_data)
+summary(anova_result)
+tukey_result <- TukeyHSD(anova_result, p.adjust.method = "fdr")
+print(tukey_result)
+
+ba16_data <- subset(mge, grepl("BA16", Sample))
+ba16_data$Generation_No. <- factor(ba16_data$Generation_No.)
+ba16_data$year <- as.factor(format(as.Date(ba16_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ba16_data$year <- factor(ba16_data$year, levels = sort(unique(ba16_data$year)))
+
+
+ba16_data$label <- paste(ba16_data$Generation_No., "\n(", ba16_data$year, ")", sep = "")
+
+# Generate the boxplot
+ggplot(ba16_data, aes(x = label, y = Relative_Load)) +
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+
+br12_data <- subset(mge, grepl("BR12", Sample))
+br12_data$Generation_No. <- factor(br12_data$Generation_No.)
+br12_data$year <- as.factor(format(as.Date(br12_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+br12_data$year <- factor(br12_data$year, levels = sort(unique(br12_data$year)))
+
+
+br12_data$label <- paste(br12_data$Generation_No., "\n(", br12_data$year, ")", sep = "")
+
+# Generate the boxplot
+ggplot(br12_data, aes(x = label, y = Relative_Load)) +
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+
+
+ls15_data <- subset(mge, grepl("LS15", Sample))
+ls15_data$Generation_No. <- factor(ls15_data$Generation_No.)
+ls15_data$year <- as.factor(format(as.Date(ls15_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ls15_data$year <- factor(ls15_data$year, levels = sort(unique(ls15_data$year)))
+
+
+ls15_data$label <- paste(ls15_data$Generation_No., "\n(", ls15_data$year, ")", sep = "")
+
+# Generate the boxplot
+ggplot(ls15_data, aes(x = label, y = Relative_Load))+
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+
+ls17_data <- subset(mge, grepl("LS17", Sample))
+ls17_data$Generation_No. <- factor(ls17_data$Generation_No.)
+ls17_data$year <- as.factor(format(as.Date(ls17_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ls17_data$year <- factor(ls17_data$year, levels = sort(unique(ls17_data$year)))
+
+
+ls17_data$label <- paste(ls17_data$Generation_No., "\n(", ls17_data$year, ")", sep = "")
+
+
+# Generate the boxplot
+ggplot(ls17_data, aes(x = label, y = Relative_Load))+
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+shapiro <- shapiro.test(ls17_data$Relative_Load)
+print(shapiro)
+kruskal_test <- kruskal.test(Relative_Load ~ Generation_No., data = ls17_data )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(ls17_data$Relative_Load, ls17_data$Generation_No., p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+
+ls45_data <- subset(mge, grepl("LS45", Sample))
+ls45_data$Generation_No. <- factor(ls45_data$Generation_No.)
+ls45_data$year <- as.factor(format(as.Date(ls45_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ls45_data$year <- factor(ls45_data$year, levels = sort(unique(ls45_data$year)))
+
+
+ls45_data$label <- paste(ls45_data$Generation_No., "\n(", ls45_data$year, ")", sep = "")
+
+
+# Generate the boxplot
+ggplot(ls45_data, aes(x = label, y = Relative_Load))+
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+
+rn36_data <- subset(mge, grepl("RN36", Sample))
+rn36_data$Generation_No. <- factor(rn36_data$Generation_No.)
+rn36_data$year <- as.factor(format(as.Date(rn36_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+rn36_data$year <- factor(rn36_data$year, levels = sort(unique(rn36_data$year)))
+
+
+rn36_data$label <- paste(rn36_data$Generation_No., "\n(", rn36_data$year, ")", sep = "")
+
+# Generate the boxplot
+ggplot(rn36_data, aes(x = label, y = Relative_Load))+
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
+shapiro <- shapiro.test(rn36_data$Relative_Load)
+print(shapiro)
+kruskal_test <- kruskal.test(Relative_Load ~ Generation_No., data = rn36_data )
+print(kruskal_test)
+pairwise_wilcox <- pairwise.wilcox.test(rn36_data$Relative_Load, rn36_data$Generation_No., p.adjust.method = "fdr")
+print(pairwise_wilcox)
+
+ur6_data <- subset(mge, grepl("UR6", Sample))
+ur6_data$Generation_No. <- factor(ur6_data$Generation_No.)
+ur6_data$year <- as.factor(format(as.Date(ur6_data$sample_collection_date, format = "%d/%m/%y"), "%Y"))
+ur6_data$year <- factor(ur6_data$year, levels = sort(unique(ur6_data$year)))
+
+
+ur6_data$label <- paste(ur6_data$Generation_No., "\n(", ur6_data$year, ")", sep = "")
+
+
+# Generate the boxplot
+ggplot(ur6_data, aes(x = label, y = Relative_Load))+
+  geom_boxplot( aes(group = Generation_No.), fill = NA, outlier.shape = NA) +  # Boxplot with specific fill color
+  geom_point(alpha = 0.5, size = 2, position = position_jitter(width = 0.2, height = 0), color = "navy") +  # Add jittered points in turquoise
+  ylab("Relative MhFV load") +
+  xlab("Generation (Year)") +
+  theme_bw() +
+  scale_x_discrete(drop = TRUE) +  # Drop any levels with no data
+  scale_y_continuous() 
